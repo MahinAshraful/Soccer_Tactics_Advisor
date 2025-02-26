@@ -1,9 +1,11 @@
 'use client';
 import { useState, FormEvent } from "react";
+import ReactMarkdown from 'react-markdown';
 
 interface Message {
   role: 'assistant' | 'user';
   content: string;
+  confidenceScore?: number;
 }
 
 export default function Home() {
@@ -41,6 +43,7 @@ export default function Home() {
         const assistantMessage: Message = {
           role: 'assistant',
           content: data.data.answer,
+          confidenceScore: data.data.accuracy_score
         };
         setMessages(prev => [...prev, assistantMessage]);
       } else {
@@ -76,7 +79,16 @@ export default function Home() {
                   <div className={`rounded-lg p-3 max-w-[80%] ${
                     message.role === 'assistant' ? 'bg-green-100' : 'bg-blue-100 ml-auto'
                   }`}>
-                    <p className="text-gray-800">{message.content}</p>
+                    <div className="prose text-gray-800">
+                      <ReactMarkdown>
+                        {message.content}
+                      </ReactMarkdown>
+                    </div>
+                    {message.role === 'assistant' && message.confidenceScore !== undefined && (
+                      <div className="mt-2 text-sm text-gray-600">
+                        Confidence: {(message.confidenceScore * 100).toFixed(1)}%
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
