@@ -1,7 +1,8 @@
 import re
 from typing import List, Dict
 import dspy
-from Ollama import OllamaLLM
+import os
+
 
 class ResponseValidator:
     def __init__(self, data_file_path: str):
@@ -9,10 +10,10 @@ class ResponseValidator:
         with open(data_file_path, 'r') as f:
             self.reference_text = f.read()
         
-    def extract_keywords(self, question: str) -> List[str]:
+    def extract_keywords(self, lm,  question: str) -> List[str]:
         """Extract keywords using local LLM"""
         prompt = f"Extract key tactical terms from this question: {question}\nReturn only the keywords separated by commas."
-        response = OllamaLLM.generate_response(prompt)
+        response = lm.generate_response(prompt)
         keywords = [k.strip() for k in response['answer'].split(',')]
         return keywords
     
@@ -34,7 +35,9 @@ class ResponseValidator:
     
     def validate_response(self, answer: str, contexts: List[str]) -> Dict:
         """Validate response using DSPy"""
-        lm = dspy.OpenAI(api_key="your-key")  # Or configure for local LLM
+        # Update OpenAI configuration
+        lm = dspy.LM('ollama_chat/deepseek-r1:7b', api_base='http://localhost:11434', api_key='')
+        dspy.configure(lm=lm)
         
         class ValidateResponse(dspy.Signature):
             """Validate if the tactical advice matches reference contexts."""

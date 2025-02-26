@@ -1,11 +1,9 @@
 from Ollama import OllamaLLM
 from validation_utils import ResponseValidator
-import os
-from dotenv import load_dotenv
 
-load_dotenv()
 
-OpenAI_API_KEY = os.getenv("OPENAI_API")
+
+#OpenAI_API_KEY = os.getenv("OPENAI_API")
 
 def main():
     
