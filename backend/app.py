@@ -30,11 +30,11 @@ def get_tactics():
             thinking = ""
             answer = ""
             keywords = []
-            validation_run = False  # Flag to track if validation has been run
             validation_result = {
                 "accuracy_score": 0,
                 "validation": "No matching context found in reference data"
             }
+            thinking_just_completed = False  # Flag to track when thinking just completed
             
             try:
                 for chunk in llm.generate_stream(prompt):
@@ -42,6 +42,7 @@ def get_tactics():
                         thinking = chunk["content"]
                         # Only extract keywords when thinking is complete
                         if chunk.get("is_complete", False):
+                            thinking_just_completed = True  # Mark that thinking just completed
                             try:
                                 keywords = validator.extract_keywords(llm, thinking)
                             except Exception as e:
@@ -56,67 +57,68 @@ def get_tactics():
                                 "accuracy_score": validation_result["accuracy_score"],
                                 "validation_details": validation_result["validation"],
                                 "keywords": keywords,
-                                "update_type": "thinking"  # Mark update type
+                                "update_type": "thinking",
+                                "thinking_complete": chunk.get("is_complete", False)  # Signal completion
                             }
                         }) + '\n'
                     
                     # Process answer chunks
                     elif chunk["type"] == "answer":
-                        answer = chunk["content"]  # Replace with full answer so far
+                        # Use the current token as the delta
+                        token = chunk["content"]
+                        # Use the full_answer field for the complete answer so far
+                        if "full_answer" in chunk:
+                            answer = chunk["full_answer"]
+                        else:
+                            answer += token  # Fallback if full_answer not provided
                         
-                        # Check if this is the final answer chunk by looking for "done" flag in the data
-                        is_final_chunk = False
-                        
-                        # Stream answer updates immediately with clear distinction
+                        # Stream answer token updates
                         yield json.dumps({
                             "status": "success", 
                             "data": {
                                 "thinking": thinking,
                                 "answer": answer,
+                                "token": token,  # Include the individual token
                                 "accuracy_score": validation_result["accuracy_score"],
                                 "validation_details": validation_result["validation"],
                                 "keywords": keywords,
-                                "update_type": "answer",  # Mark update type
-                                "is_final": is_final_chunk
+                                "update_type": "answer",
+                                "prioritize_render": thinking_just_completed,  # Signal to prioritize rendering this update
+                                "thinking_complete": thinking_just_completed  # Also signal that thinking just completed
                             }
                         }) + '\n'
-                
-                # After the entire stream is completed, run validation once
-                if keywords and answer and not validation_run:
-                    validation_run = True
-                    contexts = [
-                        ctx for keyword in keywords 
-                        if (ctx := validator.get_context_window(keyword))
-                    ]
-                    if contexts:
-                        try:
-                            validation_result = validator.validate_response(answer, contexts)
-                            # Make sure accuracy_score is a number
-                            if validation_result["accuracy_score"]:
+                        
+                        thinking_just_completed = False  # Reset the flag
+                    
+                    # When we get the done signal, run validation once and send final update
+                    elif chunk["type"] == "done":
+                        if keywords and answer:
+                            contexts = [
+                                ctx for keyword in keywords 
+                                if (ctx := validator.get_context_window(keyword))
+                            ]
+                            if contexts:
                                 try:
-                                    # Parse to number if it's a string
-                                    if isinstance(validation_result["accuracy_score"], str):
-                                        validation_result["accuracy_score"] = float(validation_result["accuracy_score"].replace('%', ''))
-                                except:
-                                    validation_result["accuracy_score"] = 0
-                        except Exception as e:
-                            print(f"Error validating response: {str(e)}")
-                
-                    # Send final message with validation results
-                    yield json.dumps({
-                        "status": "success", 
-                        "data": {
-                            "thinking": thinking,
-                            "answer": answer,
-                            "accuracy_score": validation_result["accuracy_score"],
-                            "validation_details": validation_result["validation"],
-                            "keywords": keywords,
-                            "update_type": "final"  # Mark this as the final update with validation
-                        }
-                    }) + '\n'
+                                    validation_result = validator.validate_response(answer, contexts)
+                                except Exception as e:
+                                    print(f"Error validating response: {str(e)}")
+                        
+                        # Send final update with validation results
+                        yield json.dumps({
+                            "status": "success", 
+                            "data": {
+                                "thinking": thinking,
+                                "answer": answer or chunk.get("content", ""),  # Use content from done chunk if available
+                                "accuracy_score": validation_result["accuracy_score"],
+                                "validation_details": validation_result["validation"],
+                                "keywords": keywords,
+                                "update_type": "final"
+                            }
+                        }) + '\n'
 
             except Exception as e:
                 print(f"Error in generate stream: {str(e)}")
+                print(traceback.format_exc())
                 yield json.dumps({
                     "status": "error",
                     "message": str(e)
@@ -126,6 +128,7 @@ def get_tactics():
 
     except Exception as e:
         print(f"Error in /api/tactics: {str(e)}")
+        print(traceback.format_exc())
         return jsonify({
             "status": "error",
             "message": str(e)

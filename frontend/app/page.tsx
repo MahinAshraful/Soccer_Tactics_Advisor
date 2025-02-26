@@ -93,6 +93,14 @@ export default function Home() {
               // Update answer content
               if ((data.data.update_type === 'answer' || data.data.update_type === 'final') && data.data.answer) {
                 setStreamedContent(data.data.answer);
+                
+                // If this is the first answer chunk after thinking completes, ensure UI updates immediately
+                if (data.data.prioritize_render || data.data.thinking_complete) {
+                  // Force a render by calling a state update with a timeout
+                  setTimeout(() => {
+                    setStreamedContent(prev => prev);
+                  }, 0);
+                }
               }
 
               // Update the message in state with different logic based on update type
@@ -172,7 +180,7 @@ export default function Home() {
       </nav>
 
       <main className="flex-1 container mx-auto p-4 max-w-4xl">
-        <div className="bg-white rounded-lg shadow-lg h-[calc(100vh-12rem)]">
+        <div className="bg-white rounded-lg shadow-lg h-[calc(100vh-6rem)]">
           <div className="h-[calc(100%-4rem)] overflow-y-auto p-4">
             {messages.map((message, index) => (
               <div key={index} className="flex items-start gap-2.5 mb-4">

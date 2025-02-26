@@ -81,6 +81,7 @@ class OllamaLLM:
                 
                 # Check if this token completes a thinking section
                 if not thinking_complete and "</think>" in accumulated_buffer:
+                    # Fixed regex pattern
                     think_match = re.search(r'<think>(.*?)</think>', accumulated_buffer, re.DOTALL)
                     if think_match:
                         thinking = think_match.group(1).strip()
@@ -93,12 +94,14 @@ class OllamaLLM:
                             "is_complete": True
                         }
                         
-                        # If there's any remaining content after the thinking section
+                        # If there's any remaining content after the thinking section,
+                        # immediately yield it as the start of the answer
                         if remaining:
                             answer_text = remaining
                             yield {
                                 "type": "answer",
-                                "content": answer_text
+                                "content": token, # Just send the latest token
+                                "full_answer": answer_text # Include full answer for reference
                             }
                         accumulated_buffer = ""
                 
@@ -123,7 +126,8 @@ class OllamaLLM:
                     # Send individual token updates for smoother streaming
                     yield {
                         "type": "answer",
-                        "content": answer_text  # Send cumulative answer
+                        "content": token,  # Send just the latest token
+                        "full_answer": answer_text  # Include full answer for reference
                     }
                 
                 # If no thinking tags yet and we've accumulated enough text
@@ -131,25 +135,37 @@ class OllamaLLM:
                     answer_text = accumulated_buffer  # Set this as the answer
                     yield {
                         "type": "answer",
-                        "content": answer_text
+                        "content": token,  # Send just the latest token
+                        "full_answer": answer_text  # Include full answer for reference
                     }
                     accumulated_buffer = ""
             
             # Final check for any remaining content
             if accumulated_buffer and not thinking_complete:
                 if "<think>" in accumulated_buffer:
-                    thinking_content = accumulated_buffer.split("<think>")[1]
+                    # Fixed regex here too - use safe string splitting instead
+                    parts = accumulated_buffer.split("<think>", 1)
+                    thinking_content = parts[1] if len(parts) > 1 else ""
                     yield {
                         "type": "thinking",
                         "content": thinking_content,
                         "is_complete": False
                     }
                 else:
-                    answer_text += accumulated_buffer
+                    final_token = accumulated_buffer
+                    answer_text += final_token
                     yield {
                         "type": "answer",
-                        "content": answer_text
+                        "content": final_token,  # Send just the latest token
+                        "full_answer": answer_text  # Include full answer for reference
                     }
+            
+            # Send a final chunk to indicate completion
+            yield {
+                "type": "done",
+                "content": answer_text,  # Include the final answer here as well
+                "is_complete": True
+            }
         
         except Exception as e:
             print(f"Stream error: {str(e)}")

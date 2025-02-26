@@ -3,6 +3,13 @@ from typing import List, Dict
 import dspy
 import os
 
+# Add this helper function to escape regex special characters
+def escape_regex_special_chars(text):
+    """Escape special regex characters in a string to use it safely in regex patterns"""
+    special_chars = r'[\^$.|?*+(){}[]'
+    for char in special_chars:
+        text = text.replace(char, '\\' + char)
+    return text
 
 class ResponseValidator:
     def __init__(self, data_file_path: str):
@@ -17,21 +24,28 @@ class ResponseValidator:
         keywords = [k.strip() for k in response['answer'].split(',')]
         return keywords
     
-    def get_context_window(self, keyword: str, window_size: int = 75) -> str:
-        """Get text context around a keyword"""
-        text = self.reference_text.lower()
-        keyword = keyword.lower()
+    def get_context_window(self, keyword, window_size=200):
+        """Get the text surrounding a keyword for context"""
+        if not keyword or not self.reference_text:
+            return None
         
-        matches = list(re.finditer(keyword, text))
-        contexts = []
+        # Escape special regex characters in keyword before using in regex
+        escaped_keyword = escape_regex_special_chars(keyword)
         
-        for match in matches:
-            start = max(0, match.start() - window_size)
-            end = min(len(text), match.end() + window_size)
-            context = self.reference_text[start:end]
-            contexts.append(context)
+        try:
+            matches = list(re.finditer(escaped_keyword, self.reference_text, re.IGNORECASE))
+            if not matches:
+                return None
             
-        return '\n---\n'.join(contexts)
+            # Get the first match
+            match = matches[0]
+            start_pos = max(0, match.start() - window_size)
+            end_pos = min(len(self.reference_text), match.end() + window_size)
+            
+            return self.reference_text[start_pos:end_pos]
+        except Exception as e:
+            print(f"Error finding keyword context: {str(e)}")
+            return None
     
     def validate_response(self, answer: str, contexts: List[str]) -> Dict:
         """Validate response using DSPy"""
