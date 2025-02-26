@@ -36,7 +36,7 @@ class ResponseValidator:
     def validate_response(self, answer: str, contexts: List[str]) -> Dict:
         """Validate response using DSPy"""
         # Update OpenAI configuration
-        lm = dspy.LM('ollama_chat/deepseek-r1:7b', api_base='http://localhost:11434', api_key='')
+        lm = dspy.LM('ollama_chat/deepseek-r1:1.5b', api_base='http://localhost:11434', api_key='')
         dspy.configure(lm=lm)
         
         class ValidateResponse(dspy.Signature):

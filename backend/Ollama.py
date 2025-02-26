@@ -1,5 +1,7 @@
 import requests
 import re
+import json
+from typing import Generator, Dict
 
 class OllamaLLM:
     def __init__(self, model_name="deepseek-r1:7b"):
@@ -39,6 +41,119 @@ class OllamaLLM:
             }
         else:
             raise Exception(f"Error generating response: {response.text}")
+
+    def generate_stream(self, prompt: str) -> Generator[Dict, None, None]:
+        """
+        Stream both thinking and answer parts word by word for a smooth live experience
+        """
+        response = requests.post(
+            f"{self.base_url}/generate",
+            json={
+                "model": self.model_name,
+                "prompt": "First show your thinking process surrounded by <think> tags, then provide your final answer.\n\nQuestion: " + prompt,
+                "stream": True
+            },
+            stream=True
+        )
+        
+        if response.status_code != 200:
+            raise Exception(f"Error generating response: {response.text}")
+
+        accumulated_buffer = ""
+        thinking_complete = False
+        answer_text = ""
+        
+        try:
+            for line in response.iter_lines():
+                if not line:
+                    continue
+
+                try:
+                    data = json.loads(line.decode('utf-8'))
+                except json.JSONDecodeError:
+                    continue
+
+                if "response" not in data:
+                    continue
+
+                token = data["response"]
+                accumulated_buffer += token
+                
+                # Check if this token completes a thinking section
+                if not thinking_complete and "</think>" in accumulated_buffer:
+                    think_match = re.search(r'<think>(.*?)</think>', accumulated_buffer, re.DOTALL)
+                    if think_match:
+                        thinking = think_match.group(1).strip()
+                        remaining = accumulated_buffer.split('</think>', 1)[-1].strip()
+                        thinking_complete = True
+                        
+                        yield {
+                            "type": "thinking",
+                            "content": thinking,
+                            "is_complete": True
+                        }
+                        
+                        # If there's any remaining content after the thinking section
+                        if remaining:
+                            answer_text = remaining
+                            yield {
+                                "type": "answer",
+                                "content": answer_text
+                            }
+                        accumulated_buffer = ""
+                
+                # If we're in the thinking section but not complete yet
+                elif not thinking_complete and "<think>" in accumulated_buffer:
+                    # Stream partial thinking updates
+                    if accumulated_buffer.startswith("<think>"):
+                        thinking_content = accumulated_buffer[7:]  # Remove "<think>" prefix
+                    else:
+                        parts = accumulated_buffer.split("<think>", 1)
+                        thinking_content = parts[1] if len(parts) > 1 else ""
+                    
+                    yield {
+                        "type": "thinking",
+                        "content": thinking_content,
+                        "is_complete": False
+                    }
+                
+                # If thinking is complete, stream each token as it comes for answer
+                elif thinking_complete:
+                    answer_text += token  # Add new token to answer
+                    # Send individual token updates for smoother streaming
+                    yield {
+                        "type": "answer",
+                        "content": answer_text  # Send cumulative answer
+                    }
+                
+                # If no thinking tags yet and we've accumulated enough text
+                elif len(accumulated_buffer) > 15 and "<think>" not in accumulated_buffer:
+                    answer_text = accumulated_buffer  # Set this as the answer
+                    yield {
+                        "type": "answer",
+                        "content": answer_text
+                    }
+                    accumulated_buffer = ""
+            
+            # Final check for any remaining content
+            if accumulated_buffer and not thinking_complete:
+                if "<think>" in accumulated_buffer:
+                    thinking_content = accumulated_buffer.split("<think>")[1]
+                    yield {
+                        "type": "thinking",
+                        "content": thinking_content,
+                        "is_complete": False
+                    }
+                else:
+                    answer_text += accumulated_buffer
+                    yield {
+                        "type": "answer",
+                        "content": answer_text
+                    }
+        
+        except Exception as e:
+            print(f"Stream error: {str(e)}")
+            raise Exception(f"Error in stream processing: {str(e)}")
 
     def list_available_models(self) -> list:
         """Get a list of available models"""
