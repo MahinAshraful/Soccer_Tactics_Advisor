@@ -1,256 +1,214 @@
 'use client';
 
-import { useState, FormEvent, useRef, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { useState } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
 
-interface Message {
-  role: 'assistant' | 'user';
-  content: string;
-  thinking?: string;
-  confidenceScore?: number;
-}
+export default function LandingPage() {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-export default function Home() {
-  const [messages, setMessages] = useState<Message[]>([
+  const features = [
     {
-      role: 'assistant',
-      content: "Hello! I'm your tactical soccer assistant. How can I help you today?"
+      title: "Tactical Analysis",
+      description: "Get expert analysis on soccer formations, game plans, and team strategies.",
+      icon: "📊"
+    },
+    {
+      title: "Real-Time Advice",
+      description: "Ask questions and receive immediate tactical insights based on validated soccer knowledge.",
+      icon: "⚡"
+    },
+    {
+      title: "Training Drills",
+      description: "Access a library of training exercises designed to improve specific aspects of your team's performance.",
+      icon: "🏃"
+    },
+    {
+      title: "Strategic Planning",
+      description: "Plan your approach to upcoming matches with personalized strategy recommendations.",
+      icon: "🧠"
     }
-  ]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [streamedContent, setStreamedContent] = useState('');
-  const [streamedThinking, setStreamedThinking] = useState('');
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  ];
 
-  // Auto-scroll to bottom when messages update
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamedContent, streamedThinking]);
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
-
-    const userMessage: Message = { role: 'user', content: input };
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setIsLoading(true);
-    setStreamedContent('');
-    setStreamedThinking('');
-
-    // Create temporary message for streaming
-    const tempMessage: Message = {
-      role: 'assistant',
-      content: '',
-      thinking: ''
-    };
-    setMessages(prev => [...prev, tempMessage]);
-
-    let abortController = new AbortController();
-    try {
-      const response = await fetch('http://127.0.0.1:5000/api/tactics', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prompt: input }),
-        signal: abortController.signal
-      });
-
-      if (!response.body) {
-        throw new Error('No response body');
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        // Decode the chunk and add to buffer
-        buffer += decoder.decode(value, { stream: true });
-        
-        // Process complete JSON objects
-        const parts = buffer.split('\n');
-        buffer = parts.pop() || ''; // Keep the last part if incomplete
-        
-        // Update the part that processes the data from the stream
-        for (const part of parts) {
-          if (!part.trim()) continue;
-          
-          try {
-            const data = JSON.parse(part);
-            
-            if (data.status === 'success') {
-              // Always update thinking when it's available
-              if (data.data.thinking) {
-                setStreamedThinking(data.data.thinking);
-              }
-              
-              // Update answer content
-              if ((data.data.update_type === 'answer' || data.data.update_type === 'final') && data.data.answer) {
-                setStreamedContent(data.data.answer);
-                
-                // If this is the first answer chunk after thinking completes, ensure UI updates immediately
-                if (data.data.prioritize_render || data.data.thinking_complete) {
-                  // Force a render by calling a state update with a timeout
-                  setTimeout(() => {
-                    setStreamedContent(prev => prev);
-                  }, 0);
-                }
-              }
-
-              // Update the message in state with different logic based on update type
-              setMessages(prev => {
-                const newMessages = [...prev];
-                const lastIdx = newMessages.length - 1;
-                
-                // Create new message preserving appropriate fields
-                const update: Message = {
-                  role: 'assistant',
-                  content: (data.data.update_type === 'answer' || data.data.update_type === 'final') 
-                    ? data.data.answer 
-                    : newMessages[lastIdx].content,
-                  thinking: data.data.thinking || newMessages[lastIdx].thinking || '',
-                  // Only update confidence score for final updates
-                  confidenceScore: data.data.update_type === 'final'
-                    ? data.data.accuracy_score 
-                    : newMessages[lastIdx].confidenceScore
-                };
-                
-                newMessages[lastIdx] = update;
-                return newMessages;
-              });
-            }
-          } catch (e) {
-            console.error("Error parsing JSON:", e, part);
-          }
-        }
-      }
-      
-      // Process any remaining buffer
-      if (buffer.trim()) {
-        try {
-          const data = JSON.parse(buffer);
-          if (data.status === 'success') {
-            setStreamedThinking(data.data.thinking || '');
-            setStreamedContent(data.data.answer || '');
-            
-            setMessages(prev => {
-              const newMessages = [...prev];
-              const lastIdx = newMessages.length - 1;
-              newMessages[lastIdx] = {
-                role: 'assistant',
-                content: data.data.answer || '',
-                thinking: data.data.thinking || '',
-                confidenceScore: data.data.accuracy_score
-              };
-              return newMessages;
-            });
-          }
-        } catch (e) {
-          console.error("Error parsing final JSON:", e);
-        }
-      }
-    } catch (error) {
-      if ((error as Error).name !== 'AbortError') {
-        console.log(error);
-        const errorMessage: Message = {
-          role: 'assistant',
-          content: 'Sorry, I encountered an error. Please try again.',
-        };
-        setMessages(prev => [...prev.slice(0, -1), errorMessage]);
-      }
-    } finally {
-      setIsLoading(false);
+  const testimonials = [
+    {
+      quote: "This tool has transformed how I prepare my youth team for matches. The tactical insights are spot on!",
+      author: "Coach Michael S.",
+      role: "Youth Academy Coach"
+    },
+    {
+      quote: "I love how the AI shows its thinking process, helping me understand not just what to do, but why it works.",
+      author: "Sarah T.",
+      role: "Amateur Team Manager"
     }
-  };
+  ];
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <nav className="bg-green-700 p-4 shadow-md">
-        <div className="container mx-auto">
-          <h1 className="text-white text-2xl font-bold text-center">
-            Tactical Soccer Coach
-          </h1>
+    <div className="min-h-screen flex flex-col">
+      {/* Navigation */}
+      <nav className="bg-green-700 text-white">
+        <div className="container mx-auto px-4 py-3 flex justify-between items-center">
+          <div className="flex items-center space-x-2">
+            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
+              <span className="text-green-700 text-2xl">⚽</span>
+            </div>
+            <span className="text-xl font-bold">Soccer Tactics Advisor</span>
+          </div>
+          
+          {/* Mobile menu button */}
+          <div className="md:hidden">
+            <button 
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="text-white focus:outline-none"
+            >
+              {isMenuOpen ? (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
+                </svg>
+              )}
+            </button>
+          </div>
+          
+          {/* Desktop navigation */}
+          <div className="md:flex flex flex-row space-x-8 items-center">
+            <a href="#features" className="hover:text-green-200">Features</a>
+            <a href="#how-it-works" className="hover:text-green-200">How It Works</a>
+  
+            <Link href="/home" className="bg-white text-green-700 px-4 py-2 rounded-md font-medium hover:bg-green-100 transition-colors">
+              Get Started
+            </Link>
+          </div>
         </div>
+        
+        {/* Mobile menu */}
+        {isMenuOpen && (
+          <div className="md:hidden bg-green-800 px-4 py-2">
+            <a href="#features" className="block py-2 hover:text-green-200" onClick={() => setIsMenuOpen(false)}>Features</a>
+            <a href="#how-it-works" className="block py-2 hover:text-green-200" onClick={() => setIsMenuOpen(false)}>How It Works</a>
+            <Link href="/home" className="block mt-2 bg-white text-green-700 px-4 py-2 rounded-md font-medium hover:bg-green-100 transition-colors text-center">
+              Get Started
+            </Link>
+          </div>
+        )}
       </nav>
 
-      <main className="flex-1 container mx-auto p-4 max-w-4xl">
-        <div className="bg-white rounded-lg shadow-lg h-[calc(100vh-6rem)]">
-          <div className="h-[calc(100%-4rem)] overflow-y-auto p-4">
-            {messages.map((message, index) => (
-              <div key={index} className="flex items-start gap-2.5 mb-4">
-                <div className={`rounded-lg p-3 max-w-[80%] ${
-                  message.role === 'assistant' ? 'bg-green-100' : 'bg-blue-100 ml-auto'
-                }`}>
-                  {message.role === 'user' ? (
-                    <div className="text-gray-800">{message.content}</div>
-                  ) : (
-                    <>
-                      {/* Display thinking process in collapsible section */}
-                      {(message.thinking || (index === messages.length - 1 && streamedThinking)) && (
-                        <details className="mb-2" open={index === messages.length - 1}>
-                          <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-800">
-                            View thinking process
-                          </summary>
-                          <div className="mt-2 p-2 bg-gray-50 rounded text-sm text-gray-700">
-                            {index === messages.length - 1 && streamedThinking
-                              ? streamedThinking
-                              : message.thinking || ''}
-                          </div>
-                        </details>
-                      )}
-                      
-                      {/* Display answer content */}
-                      <div className="prose text-gray-800">
-                        <ReactMarkdown>
-                          {index === messages.length - 1 && streamedContent
-                            ? streamedContent
-                            : message.content}
-                        </ReactMarkdown>
-                      </div>
-                      
-                      {/* Display confidence score when available, regardless of content length */}
-                      {message.confidenceScore !== undefined && (
-                        <div className="mt-2 text-sm text-gray-600">
-                          Confidence: {message.confidenceScore}%
-                        </div>
-                      )}
-                    </>
-                  )}
+      {/* Hero Section */}
+      <section className="bg-gradient-to-b from-green-700 to-green-600 text-white py-20">
+        <div className="container mx-auto px-4 flex flex-col md:flex-row items-center">
+          <div className="md:w-1/2 mb-10 md:mb-0">
+            <h1 className="text-4xl md:text-5xl font-bold mb-4">Elevate Your Soccer Strategy</h1>
+            <p className="text-xl mb-8">Get AI-powered tactical analysis and coaching advice based on expert soccer knowledge.</p>
+            <Link href="/home" className="bg-white text-green-700 px-6 py-3 rounded-md font-medium text-lg hover:bg-green-100 transition-colors inline-block">
+              Start Your Tactical Journey
+            </Link>
+          </div>
+          <div className="md:w-1/2 flex justify-center">
+            <div className="bg-white p-4 rounded-lg shadow-lg w-full max-w-md">
+              <div className="bg-green-100 rounded-t-md p-3 border-b border-gray-200">
+                <div className="flex items-center">
+                  <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center mr-3">
+                    <span className="text-white text-sm">AI</span>
+                  </div>
+                  <p className="text-green-800 font-medium">Tactical Soccer Coach</p>
                 </div>
               </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-
-          <div className="border-t p-4">
-            <form onSubmit={handleSubmit} className="flex gap-2">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about soccer tactics..."
-                className="flex-1 border text-black rounded p-2"
-                disabled={isLoading}
-              />
-              <button
-                type="submit"
-                className={`bg-green-600 text-white px-4 py-2 rounded ${
-                  isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-700'
-                }`}
-                disabled={isLoading}
-              >
-                {isLoading ? 'Thinking...' : 'Send'}
-              </button>
-            </form>
+              <div className="p-3">
+                <div className="bg-green-100 rounded-lg p-3 mb-3 max-w-[80%]">
+                  <p className="text-gray-800">How should I set up my team against opponents who play a high pressing game?</p>
+                </div>
+                <div className="bg-blue-100 rounded-lg p-3 ml-auto max-w-[80%]">
+                  <p className="text-gray-800">Against a high-pressing team, consider a 4-3-3 formation with quick wingers to exploit the space behind their defense...</p>
+                </div>
+              </div>
+              <div className="p-3 border-t border-gray-200">
+                <div className="flex">
+                  <input type="text" placeholder="Ask about soccer tactics..." className="flex-1 border rounded-l p-2 text-gray-700" />
+                  <button className="bg-green-600 text-white px-4 py-2 rounded-r">Send</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </main>
+      </section>
+
+      {/* Features Section */}
+      <section id="features" className="py-16 bg-white">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-12 text-gray-800">How We Can Help Your Team</h2>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {features.map((feature, index) => (
+              <div key={index} className="bg-gray-50 rounded-lg p-6 shadow-md hover:shadow-lg transition-shadow">
+                <div className="text-4xl mb-4">{feature.icon}</div>
+                <h3 className="text-xl font-bold mb-3 text-green-700">{feature.title}</h3>
+                <p className="text-gray-600">{feature.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works Section */}
+      <section id="how-it-works" className="py-16 bg-gray-50">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-12 text-gray-800">How It Works</h2>
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-green-100 text-green-700 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl font-bold">1</div>
+              <h3 className="text-xl font-bold mb-3 text-green-700">Ask Your Question</h3>
+              <p className="text-gray-600">Type in any tactical problem or scenario you're facing with your team.</p>
+            </div>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-green-100 text-green-700 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl font-bold">2</div>
+              <h3 className="text-xl font-bold mb-3 text-green-700">AI Analysis</h3>
+              <p className="text-gray-600">Our AI analyzes your question against expert soccer knowledge and tactical principles.</p>
+            </div>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-green-100 text-green-700 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl font-bold">3</div>
+              <h3 className="text-xl font-bold mb-3 text-green-700">Get Actionable Advice</h3>
+              <p className="text-gray-600">Receive detailed tactical recommendations you can implement immediately.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-16 bg-gray-50">
+        <div className="container mx-auto px-4 text-center">
+          <h2 className="text-3xl font-bold mb-6 text-gray-800">Ready to Transform Your Team's Performance?</h2>
+          <p className="text-xl mb-8 text-gray-600 max-w-3xl mx-auto">Join coaches worldwide who are using Soccer Tactics Advisor to gain a competitive edge.</p>
+          <Link href="/home" className="bg-green-700 text-white px-8 py-4 rounded-md font-medium text-lg hover:bg-green-800 transition-colors inline-block">
+            Get Started Now
+          </Link>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-800 text-white py-10">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <div className="mb-6 md:mb-0">
+              <div className="flex items-center justify-center md:justify-start">
+                <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center mr-2">
+                  <span className="text-green-700 text-lg">⚽</span>
+                </div>
+                <span className="text-lg font-bold">Soccer Tactics Advisor</span>
+              </div>
+            </div>
+            <div className="flex space-x-6">
+              <a href="#" className="hover:text-green-400">Terms</a>
+              <a href="#" className="hover:text-green-400">Privacy</a>
+              <a href="#" className="hover:text-green-400">Contact</a>
+            </div>
+          </div>
+          <div className="mt-8 text-center text-gray-400">
+            <p>&copy; {new Date().getFullYear()} Soccer Tactics Advisor. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
