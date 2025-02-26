@@ -24,11 +24,16 @@ def get_tactics():
         data = request.get_json()
         prompt = data.get('prompt', "Suggest a tactical approach for a team playing against a 4-4-2 formation")
 
+        #print(f"Received prompt: {prompt}")  # Debug log
+
         # Generate response
         response = llm.generate_response(prompt)
+       # print(f"LLM Response: {response}")  # Debug log
         
         # Extract keywords and get contexts
         keywords = validator.extract_keywords(llm, prompt)
+        #print(f"Extracted keywords: {keywords}")  # Debug log
+
         contexts = []
         for keyword in keywords:
             context = validator.get_context_window(keyword)
@@ -43,6 +48,8 @@ def get_tactics():
         
         if contexts:
             validation_result = validator.validate_response(response["answer"], contexts)
+        
+        print(f"Validation result: {validation_result}")  # Debug log
 
         return jsonify({
             "status": "success",
@@ -56,9 +63,13 @@ def get_tactics():
         })
 
     except Exception as e:
+        print(f"Error in /api/tactics: {str(e)}")  # Detailed error logging
+        import traceback
+        print(traceback.format_exc())  # Print full stack trace
         return jsonify({
             "status": "error",
-            "message": str(e)
+            "message": str(e),
+            "trace": traceback.format_exc()
         }), 500
 
 @app.errorhandler(404)
@@ -69,4 +80,4 @@ def not_found(error):
     }), 404
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)

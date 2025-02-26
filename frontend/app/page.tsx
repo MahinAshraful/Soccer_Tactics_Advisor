@@ -50,6 +50,7 @@ export default function Home() {
         throw new Error(data.message);
       }
     } catch (error) {
+      console.log(error)
       const errorMessage: Message = {
         role: 'assistant',
         content: 'Sorry, I encountered an error. Please try again.',
@@ -86,7 +87,7 @@ export default function Home() {
                     </div>
                     {message.role === 'assistant' && message.confidenceScore !== undefined && (
                       <div className="mt-2 text-sm text-gray-600">
-                        Confidence: {(message.confidenceScore * 100).toFixed(1)}%
+                        Confidence: {(message.confidenceScore )}%
                       </div>
                     )}
                   </div>

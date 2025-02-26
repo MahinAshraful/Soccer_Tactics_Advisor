@@ -7,7 +7,7 @@ from validation_utils import ResponseValidator
 
 def main():
     
-    llm = OllamaLLM(model_name="deepseek-r1:7b")
+    llm = OllamaLLM(model_name="deepseek-r1.5:7b")
     validator = ResponseValidator("./data/data.txt")
     
     # Test prompt
